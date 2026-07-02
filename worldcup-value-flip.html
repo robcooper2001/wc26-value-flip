@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚽ WC26 Value Flip</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07120a;--surface:#0e1f13;--surface2:#162b1c;
+  --border:rgba(255,255,255,0.07);--amber:#f5a623;--amber2:#ffc94a;
+  --amber-dim:#7a5210;--green:#3ddc6e;--white:#eeeae2;
+  --muted:rgba(238,234,226,0.4);--card:#1c1c1c;
+}
+body{background:var(--bg);font-family:'Inter',sans-serif;color:var(--white);min-height:100vh;overflow-x:hidden}
+
+/* HEADER */
+.app-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:13px 18px;background:var(--surface);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:50;gap:10px;
+}
+.header-left{display:flex;align-items:center;gap:10px}
+.live-dot{
+  width:8px;height:8px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;flex-shrink:0;
+}
+.live-dot.demo{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.app-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.05em;white-space:nowrap}
+.app-title span{color:var(--amber)}
+.header-right{display:flex;align-items:center;gap:10px}
+.status-text{font-size:10px;color:var(--muted);letter-spacing:.05em;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.donate-btn{
+  background:transparent;border:1px solid var(--amber-dim);color:var(--amber);
+  font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  padding:5px 11px;border-radius:6px;cursor:pointer;white-space:nowrap;
+  transition:background .15s,border-color .15s;font-family:'Inter',sans-serif;
+}
+.donate-btn:hover{background:rgba(245,166,35,.1);border-color:var(--amber)}
+
+/* FILTER BAR */
+.filter-bar{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-bottom:1px solid var(--border);background:var(--bg);flex-wrap:wrap;
+}
+.search-input{
+  flex:1;min-width:150px;background:var(--surface);border:1px solid var(--border);
+  border-radius:7px;color:var(--white);font-size:13px;padding:8px 12px;
+  outline:none;font-family:'Inter',sans-serif;transition:border-color .2s;
+}
+.search-input:focus{border-color:var(--amber)}
+.search-input::placeholder{color:var(--muted)}
+.filter-hint{font-size:11px;color:var(--muted);white-space:nowrap}
+
+/* LIST */
+.player-list{padding:12px;display:flex;flex-direction:column;gap:10px;max-width:640px;margin:0 auto}
+
+/* SECTION HEADS */
+.section-head{
+  display:flex;align-items:center;gap:10px;padding:4px 2px 2px;
+  font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--muted);
+}
+.section-head::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* EMPTY */
+.empty{text-align:center;padding:60px 20px;color:var(--muted);font-size:14px}
+
+/* PLAYER CARD */
+.player-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:13px;padding:14px 15px 12px;
+  display:flex;flex-direction:column;gap:10px;
+  position:relative;overflow:hidden;
+  transition:border-color .4s,box-shadow .4s;
+}
+.player-card.is-fav{border-color:rgba(245,166,35,.2)}
+.player-card.scoring{
+  border-color:var(--green);
+  box-shadow:0 0 30px rgba(61,220,110,.22);
+  animation:scoreFlash 2s ease-out;
+}
+@keyframes scoreFlash{0%{box-shadow:0 0 60px rgba(61,220,110,.6)}100%{box-shadow:0 0 30px rgba(61,220,110,.22)}}
+
+/* Goal banner */
+.goal-banner{
+  position:absolute;top:0;left:0;right:0;
+  background:var(--green);color:#000;
+  font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.2em;
+  text-align:center;padding:3px;
+  transform:translateY(-100%);transition:transform .3s;z-index:5;
+}
+.player-card.scoring .goal-banner{transform:translateY(0)}
+
+/* Card top */
+.card-top{display:flex;align-items:center;gap:11px}
+.avatar{
+  width:42px;height:42px;border-radius:50%;background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;font-size:20px;
+  flex-shrink:0;border:2px solid transparent;transition:border-color .3s;
+}
+.player-card.scoring .avatar{border-color:var(--green)}
+.player-card.is-fav .avatar{border-color:rgba(245,166,35,.35)}
+.player-info{flex:1;min-width:0}
+.player-name{font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
+.player-team{font-size:11px;color:var(--amber);letter-spacing:.1em;text-transform:uppercase;opacity:.85}
+.card-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.goals-badge{background:var(--surface2);border-radius:6px;padding:4px 9px;text-align:center;min-width:40px}
+.goals-num{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--amber2);line-height:1;display:block}
+.goals-lbl{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.fav-btn{background:none;border:none;cursor:pointer;font-size:18px;padding:4px;opacity:.3;transition:opacity .15s,transform .15s}
+.fav-btn:hover{opacity:.7;transform:scale(1.2)}
+.fav-btn.active{opacity:1}
+
+/* FLIP CLOCK */
+.flip-row{display:flex;align-items:center;justify-content:center;gap:3px}
+.flip-digit{position:relative;width:34px;height:50px;perspective:180px;flex-shrink:0}
+.digit-inner{
+  position:relative;width:100%;height:100%;border-radius:5px;overflow:hidden;
+  background:var(--card);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 3px 8px rgba(0,0,0,.55);
+}
+.d-top,.d-bot{position:absolute;left:0;width:100%;height:50%;overflow:hidden;display:flex;justify-content:center;background:var(--card)}
+.d-top{top:0;align-items:flex-end;border-radius:5px 5px 0 0}
+.d-bot{bottom:0;align-items:flex-start;border-radius:0 0 5px 5px}
+.d-top .dv,.d-bot .dv{font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amber2);line-height:1;position:absolute}
+.d-top .dv{bottom:-1px}.d-bot .dv{top:-1px}
+.digit-inner::after{content:'';position:absolute;left:0;top:50%;width:100%;height:2px;background:#060d07;z-index:10;transform:translateY(-50%)}
+.f-top,.f-bot{position:absolute;left:0;width:100%;height:50%;overflow:hidden;display:flex;justify-content:center;z-index:5;backface-visibility:hidden;background:var(--card)}
+.f-top{top:0;align-items:flex-end;transform-origin:bottom center;border-radius:5px 5px 0 0}
+.f-bot{bottom:0;align-items:flex-start;transform-origin:top center;border-radius:0 0 5px 5px;transform:rotateX(90deg)}
+.f-top .dv,.f-bot .dv{font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amber2);line-height:1;position:absolute}
+.f-top .dv{bottom:-1px}.f-bot .dv{top:-1px}
+.flip-digit.flipping .f-top{animation:fTop .22s ease-in forwards}
+.flip-digit.flipping .f-bot{animation:fBot .22s ease-out .22s forwards}
+@keyframes fTop{0%{transform:rotateX(0)}100%{transform:rotateX(-90deg)}}
+@keyframes fBot{0%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
+.flip-sep{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--amber-dim);line-height:50px;margin:0 1px;user-select:none}
+.value-label{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.25);text-align:center;margin-top:-4px}
+
+/* VALUE HISTORY */
+.value-history{border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:4px}
+.hist-row{display:flex;justify-content:space-between;align-items:center;font-size:11px}
+.hist-goal{color:var(--green);font-weight:600;width:52px}
+.hist-vals{color:var(--muted);flex:1;text-align:center}
+.hist-arrow{color:var(--green)}
+.hist-boost{font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--amber2);letter-spacing:.03em}
+
+/* TOAST */
+.toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:var(--green);color:#000;font-weight:700;font-size:13px;
+  letter-spacing:.08em;text-transform:uppercase;padding:10px 20px;
+  border-radius:8px;z-index:200;transition:transform .3s;white-space:nowrap;
+  pointer-events:none;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* DONATE MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;max-width:340px;width:100%;text-align:center;display:flex;flex-direction:column;gap:12px}
+.modal h2{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:.04em}
+.modal p{font-size:13px;color:var(--muted);line-height:1.7}
+.modal-link{display:block;padding:12px;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;transition:opacity .15s}
+.modal-link:hover{opacity:.85}
+.modal-link.coffee{background:var(--amber);color:#000}
+.modal-link.kofi{background:var(--surface2);color:var(--white);border:1px solid var(--border)}
+.modal-close{background:none;border:1px solid var(--border);color:var(--muted);font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:8px 20px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;transition:border-color .15s;margin-top:4px}
+.modal-close:hover{border-color:rgba(255,255,255,.3)}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* DISCLAIMER */
+.disclaimer{font-size:10px;color:rgba(255,255,255,.18);text-align:center;padding:20px 20px 32px;letter-spacing:.05em;line-height:1.7;max-width:640px;margin:0 auto}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-left">
+    <div class="live-dot" id="live-dot"></div>
+    <div class="app-title">WC26 <span>Value</span> Flip</div>
+  </div>
+  <div class="header-right">
+    <div class="status-text" id="status-text">Connecting…</div>
+    <button class="donate-btn" onclick="openDonate()">☕ Support</button>
+  </div>
+</header>
+
+<div class="filter-bar">
+  <input class="search-input" id="search" placeholder="🔍  Search player or team…" oninput="renderList()">
+  <span class="filter-hint">⭐ = favourite · pinned top</span>
+</div>
+
+<div class="player-list" id="player-list">
+  <div class="empty">Loading live data…</div>
+</div>
+
+<div class="disclaimer">
+  Market values are analyst projections based on Transfermarkt base figures — not live Transfermarkt updates (which publish every 2–4 weeks). Value boosts per goal reflect estimated market impact.
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="donate-modal">
+  <div class="modal">
+    <h2>☕ Support the App</h2>
+    <p>WC26 Value Flip is completely free and always will be. If you're enjoying it during the tournament, a small donation keeps it alive!</p>
+    <a class="modal-link coffee" href="https://buymeacoffee.com/YOUR_USERNAME" target="_blank">☕ Buy Me a Coffee</a>
+    <a class="modal-link kofi" href="https://ko-fi.com/YOUR_USERNAME" target="_blank">🍵 Support on Ko-fi</a>
+    <button class="modal-close" onclick="closeDonate()">Maybe later</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════
+const API_URL  = 'https://worldcup26.ir/get/games';
+const POLL_MS  = 30000;
+
+const BASE_VALUES = {
+  default:25,
+  'j. quiñones':28,'r. jiménez':18,'i.b. hwang':22,'h.g. oh':18,
+  'c. larin':20,'f. balogun':35,'g. reyna':40,'j. mcginn':25,
+  'nestory irankunda':30,'c. metcalfe':15,'v. júnior':200,
+  'i. saibari':22,'b. khoukhi':12,'breel embolo':28,
+  'a. diallo':20,'felix nmecha':28,'n. schlotterbeck':35,
+  'k. havertz':80,'j. musiala':150,'n. brown':18,'d. undav':22,
+  'k. mbappé':180,'kylian mbappé':180,'e. haaland':170,'erling haaland':170,
+  'j. bellingham':180,'jude bellingham':180,'l. messi':35,'lionel messi':35,
+  'l. yamal':120,'lamine yamal':120,'c. ronaldo':20,'cristiano ronaldo':20,
+  'h. kane':95,'harry kane':95,'p. foden':120,'phil foden':120,
+  'pedri':130,'b. saka':150,'bukayo saka':150,'f. wirtz':150,'florian wirtz':150,
+  'virgil van dijk':55,'c. summerville':35,
+};
+
+const VALUE_BOOSTS = {
+  default:8,
+  'j. quiñones':7,'r. jiménez':6,'f. balogun':10,'g. reyna':12,
+  'v. júnior':18,'k. havertz':12,'j. musiala':14,'n. schlotterbeck':8,
+  'k. mbappé':15,'kylian mbappé':15,'e. haaland':12,'erling haaland':12,
+  'j. bellingham':14,'jude bellingham':14,'l. messi':10,'lionel messi':10,
+  'l. yamal':20,'lamine yamal':20,'h. kane':10,'harry kane':10,
+  'p. foden':12,'phil foden':12,'pedri':14,'b. saka':13,'bukayo saka':13,
+  'f. wirtz':14,'florian wirtz':14,
+};
+
+const TEAM_EMOJI = {
+  'mexico':'🇲🇽','south africa':'🇿🇦','south korea':'🇰🇷','czech republic':'🇨🇿',
+  'canada':'🇨🇦','bosnia and herzegovina':'🇧🇦','united states':'🇺🇸','paraguay':'🇵🇾',
+  'haiti':'🇭🇹','scotland':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','australia':'🇦🇺','turkey':'🇹🇷',
+  'brazil':'🇧🇷','morocco':'🇲🇦','qatar':'🇶🇦','switzerland':'🇨🇭',
+  'ivory coast':'🇨🇮','ecuador':'🇪🇨','germany':'🇩🇪','curaçao':'🇨🇼',
+  'netherlands':'🇳🇱','france':'🇫🇷','england':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','spain':'🇪🇸',
+  'portugal':'🇵🇹','argentina':'🇦🇷','norway':'🇳🇴','japan':'🇯🇵',
+  'senegal':'🇸🇳','nigeria':'🇳🇬','colombia':'🇨🇴','uruguay':'🇺🇾',
+  'ghana':'🇬🇭','cameroon':'🇨🇲','egypt':'🇪🇬','saudi arabia':'🇸🇦',
+  'austria':'🇦🇹','denmark':'🇩🇰','poland':'🇵🇱','serbia':'🇷🇸',
+  'ukraine':'🇺🇦','indonesia':'🇮🇩','iraq':'🇮🇶','uzbekistan':'🇺🇿',
+  'new zealand':'🇳🇿','jamaica':'🇯🇲','venezuela':'🇻🇪','chile':'🇨🇱',
+  'panama':'🇵🇦','el salvador':'🇸🇻','costa rica':'🇨🇷','honduras':'🇭🇳',
+  'wales':'🏴󠁧󠁢󠁷󠁬󠁳󠁿','belgium':'🇧🇪','croatia':'🇭🇷','romania':'🇷🇴',
+  'slovakia':'🇸🇰','italy':'🇮🇹','iran':'🇮🇷',
+};
+
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let players    = {};   // key → player obj
+let favourites = new Set(JSON.parse(localStorage.getItem('wc26_favs')||'[]'));
+let pollTimer  = null;
+
+// ═══════════════════════════════════════
+// PARSE SCORERS STRING
+// {"J. Quiñones 9'","R. Jiménez 67'"} → ["J. Quiñones","R. Jiménez"]
+// ═══════════════════════════════════════
+function parseScorers(raw) {
+  if (!raw || raw === 'null' || raw === 'NULL') return [];
+  // Strip outer braces, split on comma between entries, extract names
+  const inner = raw.replace(/^\{|\}$/g,'');
+  // Each entry is "Name MM'" possibly with (p) (OG) etc
+  const matches = [...inner.matchAll(/"([^"]+)"/g)];
+  return matches.map(m => {
+    // Remove minute and flags: strip everything from the last space+digit onwards
+    const name = m[1].replace(/\s+\d+[^a-zA-Z]*$/, '').replace(/\(OG\)/i,'').trim();
+    return name;
+  }).filter(Boolean);
+}
+
+// ═══════════════════════════════════════
+// FETCH & MERGE
+// ═══════════════════════════════════════
+async function fetchAndMerge() {
+  try {
+    const res  = await fetch(API_URL);
+    const data = await res.json();
+    const games = data.games || data || [];
+
+    // Build fresh scorer totals from all finished/live games
+    const totals = {}; // normKey → { name, team, goals }
+
+    games.forEach(game => {
+      const home = game.home_team_name_en || '';
+      const away = game.away_team_name_en || '';
+
+      parseScorers(game.home_scorers).forEach(name => {
+        // Skip own goals (they go to the other team's scorer list but we ignore OG)
+        const raw = game.home_scorers || '';
+        // Check if this entry has OG
+        const entryMatch = new RegExp('"' + escRe(name) + '[^"]*"').exec(raw);
+        if (entryMatch && /\(OG\)/i.test(entryMatch[0])) return;
+        const k = normKey(name, home);
+        if (!totals[k]) totals[k] = { name, team: home, goals: 0 };
+        totals[k].goals++;
+      });
+
+      parseScorers(game.away_scorers).forEach(name => {
+        const raw = game.away_scorers || '';
+        const entryMatch = new RegExp('"' + escRe(name) + '[^"]*"').exec(raw);
+        if (entryMatch && /\(OG\)/i.test(entryMatch[0])) return;
+        const k = normKey(name, away);
+        if (!totals[k]) totals[k] = { name, team: away, goals: 0 };
+        totals[k].goals++;
+      });
+    });
+
+    // Merge into state — fire goal animations for new goals
+    let anyNew = false;
+    Object.entries(totals).forEach(([key, data]) => {
+      const existing = players[key];
+      if (!existing) {
+        const base  = getBase(data.name);
+        const boost = getBoost(data.name);
+        players[key] = {
+          key, name: data.name, team: data.team,
+          emoji: teamEmoji(data.team),
+          goals: data.goals,
+          currentValue: parseFloat((base + data.goals * boost).toFixed(1)),
+          valueHistory: buildHistory(base, boost, data.goals),
+          boost,
+        };
+        anyNew = true;
+      } else if (data.goals > existing.goals) {
+        const diff = data.goals - existing.goals;
+        for (let i = 0; i < diff; i++) {
+          setTimeout(() => triggerGoal(key), i * 700);
+        }
+      }
+    });
+
+    if (anyNew) renderList();
+    setStatus('Live · ' + new Date().toLocaleTimeString());
+  } catch(e) {
+    setStatus('⚠ Poll failed · retrying…');
+  }
+}
+
+function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') }
+
+function normKey(name, team){
+  return (name+'_'+team).toLowerCase().replace(/\s+/g,'_');
+}
+
+function buildHistory(base, boost, goals){
+  return Array.from({length:goals},(_,i)=>({
+    goal:i+1, before:parseFloat((base+i*boost).toFixed(1)),
+    after:parseFloat((base+(i+1)*boost).toFixed(1)), boost
+  }));
+}
+
+// ═══════════════════════════════════════
+// GOAL TRIGGER
+// ═══════════════════════════════════════
+function triggerGoal(key){
+  const p = players[key];
+  if(!p) return;
+  const before = p.currentValue;
+  const after  = parseFloat((before + p.boost).toFixed(1));
+  p.goals++;
+  p.currentValue = after;
+  p.valueHistory.push({ goal:p.goals, before, after, boost:p.boost });
+
+  // Re-render to get updated card in DOM
+  renderList();
+
+  // Animate existing card
+  const card = document.getElementById('pc-'+CSS.escape(key));
+  if(card){
+    card.classList.add('scoring');
+    animateFlip(card, before, after);
+    showToast('⚽ GOAL!  '+p.name+'  ·  €'+after.toFixed(1)+'M');
+    setTimeout(()=>card.classList.remove('scoring'), 3200);
+  }
+}
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function renderList(){
+  const list  = document.getElementById('player-list');
+  const q     = (document.getElementById('search').value||'').toLowerCase();
+  let   all   = Object.values(players);
+
+  if(q) all = all.filter(p=>p.name.toLowerCase().includes(q)||p.team.toLowerCase().includes(q));
+
+  const favs = all.filter(p=>favourites.has(p.key)).sort((a,b)=>b.goals-a.goals);
+  const rest = all.filter(p=>!favourites.has(p.key)).sort((a,b)=>b.goals-a.goals);
+
+  if(!all.length){
+    list.innerHTML = '<div class="empty">No scorers yet — goals appear automatically ⚽</div>';
+    return;
+  }
+
+  let html = '';
+  if(favs.length){
+    html += sectionHead('⭐  Favourites');
+    favs.forEach(p=>{ html += cardHTML(p) });
+  }
+  if(rest.length){
+    html += sectionHead('Tournament Scorers');
+    rest.forEach(p=>{ html += cardHTML(p) });
+  }
+
+  list.innerHTML = html;
+
+  // Build flip displays
+  all.forEach(p=>{
+    const container = document.getElementById('flip-'+p.key);
+    if(container) buildFlipDisplay(container, p.currentValue);
+  });
+}
+
+function sectionHead(label){
+  return `<div class="section-head">${label}</div>`;
+}
+
+function cardHTML(p){
+  const isFav = favourites.has(p.key);
+  const histHTML = p.valueHistory.length ? `
+    <div class="value-history">
+      ${p.valueHistory.map(h=>`
+        <div class="hist-row">
+          <span class="hist-goal">Goal ${h.goal}</span>
+          <span class="hist-vals">€${h.before.toFixed(1)}M <span class="hist-arrow">→</span> €${h.after.toFixed(1)}M</span>
+          <span class="hist-boost">+€${h.boost.toFixed(1)}M</span>
+        </div>`).join('')}
+    </div>` : '';
+
+  return `
+    <div class="player-card${isFav?' is-fav':''}" id="pc-${p.key}">
+      <div class="goal-banner">⚽  GOAL!  ${p.name.split(' ').pop().toUpperCase()}</div>
+      <div class="card-top">
+        <div class="avatar">${p.emoji||'⚽'}</div>
+        <div class="player-info">
+          <div class="player-name">${p.name}</div>
+          <div class="player-team">${p.team}</div>
+        </div>
+        <div class="card-right">
+          <div class="goals-badge">
+            <span class="goals-num">${p.goals}</span>
+            <span class="goals-lbl">Goals</span>
+          </div>
+          <button class="fav-btn${isFav?' active':''}" onclick="toggleFav('${p.key}')" title="Toggle favourite">⭐</button>
+        </div>
+      </div>
+      <div class="flip-row" id="flip-${p.key}"></div>
+      <div class="value-label">Market Value · € Million</div>
+      ${histHTML}
+    </div>`;
+}
+
+// ═══════════════════════════════════════
+// FAVOURITES
+// ═══════════════════════════════════════
+function toggleFav(key){
+  favourites.has(key) ? favourites.delete(key) : favourites.add(key);
+  localStorage.setItem('wc26_favs', JSON.stringify([...favourites]));
+  renderList();
+}
+
+// ═══════════════════════════════════════
+// FLIP CLOCK
+// ═══════════════════════════════════════
+function buildFlipDisplay(container, value){
+  container.innerHTML = '';
+  valueToChars(value).forEach(ch=>{
+    if(ch==='.'){
+      const s = document.createElement('div');
+      s.className='flip-sep'; s.textContent='.';
+      container.appendChild(s);
+    } else {
+      container.appendChild(makeDigit(ch));
+    }
+  });
+}
+
+function makeDigit(ch){
+  const d = document.createElement('div');
+  d.className = 'flip-digit';
+  d.innerHTML = `<div class="digit-inner">
+    <div class="d-top"><span class="dv">${ch}</span></div>
+    <div class="d-bot"><span class="dv">${ch}</span></div>
+    <div class="f-top"><span class="dv">${ch}</span></div>
+    <div class="f-bot"><span class="dv">${ch}</span></div>
+  </div>`;
+  return d;
+}
+
+function valueToChars(v){ return parseFloat(v).toFixed(1).split('') }
+
+async function animateFlip(card, fromVal, toVal){
+  const container = card.querySelector('.flip-row');
+  if(!container) return;
+  const steps = interpSteps(fromVal, toVal);
+  for(let i=1;i<steps.length;i++){
+    await flipToValue(container, steps[i-1], steps[i]);
+    await sleep(55);
+  }
+}
+
+function interpSteps(from, to){
+  const n = Math.max(8, Math.min(30, Math.round((to-from)*2)));
+  const steps=[];
+  for(let i=0;i<=n;i++) steps.push(parseFloat((from+(to-from)*(i/n)).toFixed(1)));
+  return [...new Set(steps)];
+}
+
+async function flipToValue(container, prev, next){
+  const pChars = valueToChars(prev);
+  const nChars = valueToChars(next);
+  const digits = container.querySelectorAll('.flip-digit');
+  const maxLen = Math.max(pChars.length, nChars.length);
+  const pPad = [...Array(maxLen-pChars.length).fill('0'), ...pChars];
+  const nPad = [...Array(maxLen-nChars.length).fill('0'), ...nChars];
+  const flips=[]; let di=0;
+  for(let i=0;i<maxLen;i++){
+    if(pPad[i]==='.'){continue}
+    const el=digits[di++];
+    if(!el) continue;
+    if(pPad[i]!==nPad[i]) flips.push(flipDigit(el,nPad[i]));
+  }
+  await Promise.all(flips);
+}
+
+function flipDigit(el, newCh){
+  return new Promise(resolve=>{
+    const fTop=el.querySelector('.f-top .dv'), fBot=el.querySelector('.f-bot .dv');
+    const dTop=el.querySelector('.d-top .dv'), dBot=el.querySelector('.d-bot .dv');
+    fTop.textContent=dTop.textContent; fBot.textContent=newCh;
+    el.classList.remove('flipping'); void el.offsetWidth; el.classList.add('flipping');
+    setTimeout(()=>{ dTop.textContent=newCh }, 220);
+    setTimeout(()=>{ dBot.textContent=newCh; el.classList.remove('flipping'); resolve() }, 490);
+  });
+}
+
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+// ═══════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════
+function getBase(name){
+  const k=(name||'').toLowerCase();
+  return BASE_VALUES[k]??BASE_VALUES.default;
+}
+function getBoost(name){
+  const k=(name||'').toLowerCase();
+  return VALUE_BOOSTS[k]??VALUE_BOOSTS.default;
+}
+function teamEmoji(team){
+  return TEAM_EMOJI[(team||'').toLowerCase()]||'⚽';
+}
+function setStatus(msg){ document.getElementById('status-text').textContent=msg }
+
+let toastTimer=null;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),3500);
+}
+function openDonate(){ document.getElementById('donate-modal').classList.add('open') }
+function closeDonate(){ document.getElementById('donate-modal').classList.remove('open') }
+
+// ═══════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════
+fetchAndMerge();
+pollTimer = setInterval(fetchAndMerge, POLL_MS);
+</script>
+</body>
+</html>
