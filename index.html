@@ -113,13 +113,9 @@ body{background:var(--bg);font-family:'Inter',sans-serif;color:var(--white);min-
 .fav-btn.active{opacity:1}
 
 /* ════════════════════════════════════════
-   SPLIT-FLAP BOARD
-   Inspired by Solari di Udine airport boards.
-   Each character has:
-     - A static "revealed" back (top + bottom)
-     - Two animated flaps that fold/unfold
-   High contrast: near-white text on dark panels
-   with a clear black gap at the centreline.
+   SPLIT-FLAP BOARD — canvas-rendered digits
+   Each .flap-char contains a single <canvas>
+   JS draws top/bottom halves and animates the fold
 ════════════════════════════════════════ */
 .flip-display{
   display:flex;align-items:center;justify-content:center;
@@ -129,102 +125,13 @@ body{background:var(--bg);font-family:'Inter',sans-serif;color:var(--white);min-
   padding:10px 16px;
   box-shadow:inset 0 2px 8px rgba(0,0,0,.6);
 }
-
 .flap-char{
   position:relative;
-  width:46px;height:68px;
   flex-shrink:0;
-  /* Subtle 3-D depth on the whole unit */
-  filter:drop-shadow(0 4px 6px rgba(0,0,0,.7));
 }
-
-/* ── Static revealed halves ─────────────
-   These are always visible "behind" the flaps.
-   When a flap folds away it reveals the static half underneath. */
-.s-top, .s-bot{
-  position:absolute;left:0;width:100%;height:50%;overflow:hidden;
-}
-.s-top{
-  top:0;
-  background:var(--flap-top-bg);
-  border-radius:4px 4px 0 0;
-  display:flex;align-items:flex-end;justify-content:center;
-}
-.s-bot{
-  bottom:0;
-  background:var(--flap-bg);
-  border-radius:0 0 4px 4px;
-  display:flex;align-items:flex-start;justify-content:center;
-  border-top:2px solid var(--flap-gap);
-}
-.s-top .cv, .s-bot .cv{
-  font-family:'Bebas Neue',sans-serif;
-  font-size:56px;
-  color:var(--flap-text);
-  line-height:1;
-  position:absolute;
-  text-shadow:0 0 12px rgba(255,255,255,.15);
-}
-.s-top .cv{bottom:-1px}
-.s-bot .cv{top:-1px}
-
-/* ── Animated flaps ─────────────────────
-   f-top: shows OLD char's top half — folds DOWN (away from viewer)
-   f-bot: shows NEW char's bottom half — swings UP into view        */
-.f-top, .f-bot{
-  position:absolute;left:0;width:100%;height:50%;
-  overflow:hidden;
-  display:flex;justify-content:center;
-  backface-visibility:hidden;z-index:3;
-}
-.f-top{
-  top:0;
-  align-items:flex-end;
-  background:var(--flap-top-bg);
-  border-radius:4px 4px 0 0;
-  transform-origin:bottom center;
-  /* Highlight on front face */
-  background-image:linear-gradient(180deg,var(--flap-shine) 0%,transparent 60%);
-  box-shadow:0 3px 6px rgba(0,0,0,.5);
-}
-.f-bot{
-  bottom:0;
-  align-items:flex-start;
-  background:var(--flap-bg);
-  border-radius:0 0 4px 4px;
-  transform-origin:top center;
-  transform:rotateX(-90deg);
-  border-top:2px solid var(--flap-gap);
-  box-shadow:0 -3px 6px rgba(0,0,0,.5);
-}
-.f-top .cv, .f-bot .cv{
-  font-family:'Bebas Neue',sans-serif;
-  font-size:56px;
-  color:var(--flap-text);
-  line-height:1;
-  position:absolute;
-  text-shadow:0 0 12px rgba(255,255,255,.15);
-}
-.f-top .cv{bottom:-1px}
-.f-bot .cv{top:-1px}
-
-/* ── Flip keyframes ── */
-.flap-char.flipping .f-top{
-  animation:flapTopDown 0.2s cubic-bezier(.4,0,.6,1) forwards;
-}
-.flap-char.flipping .f-bot{
-  animation:flapBotUp 0.2s cubic-bezier(.4,0,.6,1) 0.2s forwards;
-}
-
-@keyframes flapTopDown{
-  0%  {transform:rotateX(0deg);   box-shadow:0 3px 6px rgba(0,0,0,.5)}
-  50% {box-shadow:0 10px 20px rgba(0,0,0,.9)}
-  100%{transform:rotateX(90deg);  box-shadow:0 8px 16px rgba(0,0,0,.8)}
-}
-@keyframes flapBotUp{
-  0%  {transform:rotateX(-90deg); box-shadow:0 -8px 16px rgba(0,0,0,.8)}
-  50% {box-shadow:0 -10px 20px rgba(0,0,0,.9)}
-  100%{transform:rotateX(0deg);   box-shadow:0 -3px 6px rgba(0,0,0,.5)}
+.flap-char canvas{
+  display:block;
+  border-radius:5px;
 }
 
 /* Currency labels */
@@ -572,94 +479,244 @@ function toggleFav(key){
 }
 
 // ═══════════════════════════════════════
-// SPLIT-FLAP BUILDER
+// CANVAS SPLIT-FLAP ENGINE
+// W×H canvas, dark panels, white Bebas Neue text
+// Clips top/bottom halves precisely at mid-line
+// Animates with requestAnimationFrame
 // ═══════════════════════════════════════
-function buildFlapDisplay(container, value){
-  const suffix=container.querySelector('.flip-suffix');
-  container.querySelectorAll('.flap-char').forEach(el=>el.remove());
-  String(Math.round(value)).split('').forEach(ch=>{
-    container.insertBefore(makeFlapChar(ch),suffix);
+const CW = 46, CH = 68, FONT = '600 56px "Bebas Neue"';
+const COL_TOP = '#323232', COL_BOT = '#2a2a2a', COL_TEXT = '#ffffff', COL_GAP = '#000000';
+const GAP = 2; // px gap at centreline
+
+function drawHalf(ctx, ch, half) {
+  // half: 'top' or 'bot'
+  // Draws the full character then clips to upper or lower half
+  ctx.clearRect(0, 0, CW, CH);
+
+  const mid = CH / 2;
+
+  // Background
+  ctx.fillStyle = half === 'top' ? COL_TOP : COL_BOT;
+  ctx.fillRect(0, 0, CW, CH);
+
+  // Clip to correct half
+  ctx.save();
+  ctx.beginPath();
+  if (half === 'top') {
+    ctx.rect(0, 0, CW, mid - GAP/2);
+  } else {
+    ctx.rect(0, mid + GAP/2, CW, mid);
+  }
+  ctx.clip();
+
+  // Draw character centred — anchored so midline of char = midline of canvas
+  ctx.fillStyle = COL_TEXT;
+  ctx.font = FONT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(ch, CW/2, CH/2);
+
+  ctx.restore();
+
+  // Gap line
+  ctx.fillStyle = COL_GAP;
+  if (half === 'top') {
+    ctx.fillRect(0, mid - GAP, CW, GAP);
+  } else {
+    ctx.fillRect(0, 0, CW, GAP);
+  }
+}
+
+function drawFull(ctx, ch) {
+  ctx.clearRect(0, 0, CW, CH);
+  // Top half
+  ctx.fillStyle = COL_TOP;
+  ctx.fillRect(0, 0, CW, CH/2);
+  // Bottom half
+  ctx.fillStyle = COL_BOT;
+  ctx.fillRect(0, CH/2, CW, CH/2);
+  // Gap
+  ctx.fillStyle = COL_GAP;
+  ctx.fillRect(0, CH/2 - GAP/2, CW, GAP);
+  // Character
+  ctx.fillStyle = COL_TEXT;
+  ctx.font = FONT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(ch, CW/2, CH/2);
+}
+
+function makeFlapChar(ch) {
+  const wrap = document.createElement('div');
+  wrap.className = 'flap-char';
+  const canvas = document.createElement('canvas');
+  canvas.width = CW; canvas.height = CH;
+  canvas.style.width  = CW + 'px';
+  canvas.style.height = CH + 'px';
+  wrap.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  drawFull(ctx, ch);
+  wrap._ch = ch;
+  wrap._ctx = ctx;
+  return wrap;
+}
+
+function buildFlapDisplay(container, value) {
+  const suffix = container.querySelector('.flip-suffix');
+  container.querySelectorAll('.flap-char').forEach(el => el.remove());
+  String(Math.round(value)).split('').forEach(ch => {
+    container.insertBefore(makeFlapChar(ch), suffix);
   });
 }
 
-function makeFlapChar(ch){
-  const d=document.createElement('div');
-  d.className='flap-char';
-  d.innerHTML=`
-    <div class="s-top"><span class="cv">${ch}</span></div>
-    <div class="s-bot"><span class="cv">${ch}</span></div>
-    <div class="f-top"><span class="cv">${ch}</span></div>
-    <div class="f-bot"><span class="cv">${ch}</span></div>`;
-  return d;
+// ── Animation ──
+// Phase 1: top flap of OLD char rotates down (0 → 90°)
+//   We draw a squished version of the top half using ctx scale
+// Phase 2: bottom flap of NEW char rotates up (90° → 0°)
+//   We draw a squished version of the bottom half
+
+function animChar(wrap, oldCh, newCh) {
+  return new Promise(resolve => {
+    const ctx = wrap._ctx;
+    const duration = 200; // ms per phase
+    let start = null;
+
+    // Offscreen canvases for each half
+    const offTop = document.createElement('canvas');
+    offTop.width = CW; offTop.height = CH/2;
+    const ctxTop = offTop.getContext('2d');
+    drawHalf(ctxTop, oldCh, 'top'); // old top half
+
+    const offBot = document.createElement('canvas');
+    offBot.width = CW; offBot.height = CH/2;
+    const ctxBot = offBot.getContext('2d');
+    drawHalf(ctxBot, newCh, 'bot'); // new bottom half
+
+    // Static revealed halves (shown once flap folds past 90°)
+    const offNewTop = document.createElement('canvas');
+    offNewTop.width = CW; offNewTop.height = CH/2;
+    const ctxNewTop = offNewTop.getContext('2d');
+    drawHalf(ctxNewTop, newCh, 'top');
+
+    const offOldBot = document.createElement('canvas');
+    offOldBot.width = CW; offOldBot.height = CH/2;
+    const ctxOldBot = offOldBot.getContext('2d');
+    drawHalf(ctxOldBot, oldCh, 'bot');
+
+    const mid = CH / 2;
+
+    function phase1(ts) {
+      if (!start) start = ts;
+      const t = Math.min((ts - start) / duration, 1);
+      const ease = t < .5 ? 2*t*t : -1+(4-2*t)*t;
+
+      ctx.clearRect(0, 0, CW, CH);
+
+      // Static: new top half already revealed underneath
+      ctx.drawImage(offNewTop, 0, 0, CW, mid);
+      // Static: old bottom half stays put
+      ctx.drawImage(offOldBot, 0, mid, CW, mid);
+      // Gap
+      ctx.fillStyle = COL_GAP;
+      ctx.fillRect(0, mid - GAP/2, CW, GAP);
+
+      // Animated top flap — squish vertically from mid upward
+      const h = Math.round(mid * (1 - ease));
+      if (h > 0) {
+        ctx.save();
+        ctx.translate(0, mid - h);
+        ctx.drawImage(offTop, 0, 0, CW, mid, 0, 0, CW, h);
+        // Shadow as it folds
+        ctx.fillStyle = `rgba(0,0,0,${ease * 0.5})`;
+        ctx.fillRect(0, 0, CW, h);
+        ctx.restore();
+      }
+
+      if (t < 1) {
+        requestAnimationFrame(phase1);
+      } else {
+        start = null;
+        requestAnimationFrame(phase2);
+      }
+    }
+
+    function phase2(ts) {
+      if (!start) start = ts;
+      const t = Math.min((ts - start) / duration, 1);
+      const ease = t < .5 ? 2*t*t : -1+(4-2*t)*t;
+
+      ctx.clearRect(0, 0, CW, CH);
+
+      // Static: new top half
+      ctx.drawImage(offNewTop, 0, 0, CW, mid);
+      // Static: new bottom half revealed underneath
+      ctx.drawImage(offBot, 0, mid, CW, mid);
+      // Gap
+      ctx.fillStyle = COL_GAP;
+      ctx.fillRect(0, mid - GAP/2, CW, GAP);
+
+      // Animated bottom flap swings in — squish from mid downward
+      const h = Math.round(mid * ease);
+      if (h > 0) {
+        ctx.save();
+        ctx.translate(0, mid);
+        ctx.drawImage(offBot, 0, 0, CW, mid, 0, 0, CW, h);
+        // Shadow fades out
+        ctx.fillStyle = `rgba(0,0,0,${(1-ease) * 0.5})`;
+        ctx.fillRect(0, 0, CW, h);
+        ctx.restore();
+      }
+
+      if (t < 1) {
+        requestAnimationFrame(phase2);
+      } else {
+        // Final state — draw clean full char
+        drawFull(ctx, newCh);
+        wrap._ch = newCh;
+        resolve();
+      }
+    }
+
+    requestAnimationFrame(phase1);
+  });
 }
 
-// ═══════════════════════════════════════
-// FLIP ANIMATION
-// ═══════════════════════════════════════
-async function animateFlapCount(card, fromVal, toVal){
-  const container=card.querySelector('.flip-display');
-  if(!container) return;
-  const steps=interpSteps(Math.round(fromVal),Math.round(toVal));
-  for(let i=1;i<steps.length;i++){
-    await stepFlap(container,steps[i-1],steps[i]);
+async function animateFlapCount(card, fromVal, toVal) {
+  const container = card.querySelector('.flip-display');
+  if (!container) return;
+  const steps = interpSteps(Math.round(fromVal), Math.round(toVal));
+  for (let i = 1; i < steps.length; i++) {
+    await stepFlap(container, steps[i-1], steps[i]);
     await sleep(65);
   }
 }
 
-function interpSteps(from,to){
-  const diff=to-from;
-  const n=Math.max(6,Math.min(28,diff));
-  const s=new Set();
-  for(let i=0;i<=n;i++) s.add(Math.round(from+diff*(i/n)));
+function interpSteps(from, to) {
+  const diff = to - from;
+  const n = Math.max(6, Math.min(28, diff));
+  const s = new Set();
+  for (let i = 0; i <= n; i++) s.add(Math.round(from + diff*(i/n)));
   return [...s];
 }
 
-async function stepFlap(container,prev,next){
-  const pStr=String(prev), nStr=String(next);
-  const chars=container.querySelectorAll('.flap-char');
+async function stepFlap(container, prev, next) {
+  const pStr = String(prev), nStr = String(next);
+  const chars = container.querySelectorAll('.flap-char');
 
-  // If digit count changed, just rebuild cleanly
-  if(chars.length!==nStr.length){
-    buildFlapDisplay(container,next);
+  if (chars.length !== nStr.length) {
+    buildFlapDisplay(container, next);
     return;
   }
 
-  const flips=[];
-  chars.forEach((el,i)=>{
-    if(pStr[i]!==nStr[i]) flips.push(animChar(el,pStr[i]||'0',nStr[i]));
+  const flips = [];
+  chars.forEach((el, i) => {
+    if (pStr[i] !== nStr[i]) flips.push(animChar(el, pStr[i]||'0', nStr[i]));
   });
   await Promise.all(flips);
 }
 
-function animChar(el,oldCh,newCh){
-  return new Promise(resolve=>{
-    const sTop=el.querySelector('.s-top .cv');
-    const sBot=el.querySelector('.s-bot .cv');
-    const fTop=el.querySelector('.f-top .cv');
-    const fBot=el.querySelector('.f-bot .cv');
-
-    // f-top shows OLD top half (will fold down and disappear)
-    fTop.textContent=oldCh;
-    // Immediately update static-top to NEW char — revealed as f-top folds away
-    sTop.textContent=newCh;
-    // f-bot shows NEW bottom half (will swing up into view)
-    fBot.textContent=newCh;
-    // static-bot already ready with new char
-    sBot.textContent=newCh;
-
-    el.classList.remove('flipping');
-    void el.offsetWidth;
-    el.classList.add('flipping');
-
-    setTimeout(()=>{
-      el.classList.remove('flipping');
-      resolve();
-    },420);
-  });
-}
-
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-
+// ═══════════════════════════════════════
+// HELPERS
 // ═══════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════
@@ -684,4 +741,3 @@ setInterval(fetchAndMerge,POLL_MS);
 </script>
 </body>
 </html>
-
